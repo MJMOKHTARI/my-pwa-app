@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جستجوی شماره فنی - PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+</head>
+<body>
+    <h1>جستجوی شماره فنی</h1>
+    <div id="step1">
+        <p>لطفاً فایل مرجع اکسل (.xlsx یا .xls) را انتخاب کنید:</p>
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" />
+    </div>
+    <div id="step2" style="display:none;">
+        <button id="scanBtn">اسکن بارکد</button>
+        <button id="ocrBtn">خواندن متن (OCR)</button>
+        <button id="speechBtn">گفتار به متن</button>
+        <input type="text" id="searchInput" placeholder="شماره فنی را وارد یا انتخاب کنید">
+        <button id="searchBtn">جستجو</button>
+    </div>
+    <div id="result"></div>
+    <div id="scanner-container" style="display:none;">
+        <video id="scanner-video"></video>
+    </div>
+    <input type="file" id="ocrImageInput" accept="image/*" style="display:none;" />
+
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then(() => console.log('سرویس ورکر ثبت شد'));
+        }
+    </script>
+</body>
+</html>
