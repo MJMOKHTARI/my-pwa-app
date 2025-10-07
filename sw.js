@@ -1,22 +1,123 @@
-const CACHE_NAME = 'my-pwa-cache-v1';
-const urlsToCache = [
-    '/',
-    'index.html',
-    'styles.css',
-    'app.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js'
-];
+let data = []; // داده‌های فایل
+let technicalNumberColumn = 'شماره فنی'; // نام ستون شماره فنی
+let columnsToShow = ['محصول', 'سازنده', 'گواهی', 'ایمارک']; // ستون‌های برای نمایش
 
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-    );
+// خواندن و پارس فایل اکسل
+function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const arrayBuffer = event.target.result;
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const headers = data[0];
+        data = data.slice(1).map(row => {
+            let obj = {};
+            headers.forEach((header, index) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
+
+        if (data.length > 0) {
+            technicalNumberColumn = headers.find(h => h && (h.includes('شماره فنی') || h.includes('Technical Number'))) || headers[0];
+            document.getElementById('result').innerHTML = '<p>فایل لود شد. آماده جستجو.</p>';
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+        } else {
+            document.getElementById('result').innerHTML = '<p>فایل خالی است.</p>';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// مدیریت انتخاب فایل
+document.getElementById('fileInput').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        loadFile(file);
+    }
 });
 
-self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        caches.match(event.request).then((response) => response || fetch(event.request))
-    );
+// اسکن بارکد
+document.getElementById('scanBtn').addEventListener('click', () => {
+    const scannerContainer = document.getElementById('scanner-container');
+    scannerContainer.style.display = 'block';
+
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#scanner-video'),
+            constraints: { facingMode: "environment" }
+        },
+        decoder: { readers: ["code_128_reader", "ean_reader"] }
+    }, (err) => {
+        if (err) {
+            document.getElementById('result').innerHTML = '<p>خطا در اسکن.</p>';
+            scannerContainer.style.display = 'none';
+            return;
+        }
+        Quagga.start();
+    });
+
+    Quagga.onDetected((result) => {
+        document.getElementById('searchInput').value = result.codeResult.code.trim();
+        Quagga.stop();
+        scannerContainer.style.display = 'none';
+        searchData();
+    });
 });
+
+// OCR
+document.getElementById('ocrBtn').addEventListener('click', () => {
+    document.getElementById('ocrImageInput').click();
+});
+
+document.getElementById('ocrImageInput').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        document.getElementById('result').innerHTML = '<p>در حال پردازش...</p>';
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        document.getElementById('searchInput').value = text.trim().replace(/\s+/g, '');
+        searchData();
+    }
+});
+
+// گفتار به متن
+document.getElementById('speechBtn').addEventListener('click', () => {
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'fa-IR';
+    recognition.start();
+    recognition.onresult = (event) => {
+        document.getElementById('searchInput').value = event.results[0][0].transcript.trim();
+        searchData();
+    };
+});
+
+// جستجو
+function searchData() {
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '';
+
+    const matches = data.filter(row => {
+        const value = row[technicalNumberColumn];
+        return value && value.toString().toLowerCase().includes(query);
+    });
+
+    if (matches.length > 0) {
+        matches.forEach(match => {
+            let output = '';
+            columnsToShow.forEach(col => {
+                output += `<p>${col}: ${match[col] || 'نامشخص'}</p>`;
+            });
+            resultDiv.innerHTML += output + '<hr>';
+        });
+    } else {
+        resultDiv.innerHTML = '<p>هیچ نتیجه‌ای یافت نشد.</p>';
+    }
+}
+
+document.getElementById('searchBtn').addEventListener('click', searchData);
