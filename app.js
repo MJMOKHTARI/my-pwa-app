@@ -41,25 +41,34 @@ document.getElementById('fileInput').addEventListener('change', (event) => {
 });
 
 // اسکن بارکد
-document.getElementById('scanBtn').addEventListener('click', () => {
+document.getElementById('scanBtn').addEventListener('click', async () => {
     const scannerContainer = document.getElementById('scanner-container');
     scannerContainer.style.display = 'block';
 
-    Quagga.init({
-        inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#scanner-video'),
-            constraints: { facingMode: "environment" }
-        },
-        decoder: { readers: ["code_128_reader", "ean_reader"] }
-    }, (err) => {
-        if (err) {
-            document.getElementById('result').innerHTML = '<p>خطا در اسکن.</p>';
-            scannerContainer.style.display = 'none';
-            return;
-        }
-        Quagga.start();
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const video = document.getElementById('scanner-video');
+        video.srcObject = stream;
+        video.play();
+
+        const barcodeDetector = new BarcodeDetector({ formats: ['code_128', 'ean_13'] });
+        const detect = async () => {
+            const barcodes = await barcodeDetector.detect(video);
+            if (barcodes.length > 0) {
+                document.getElementById('searchInput').value = barcodes[0].rawValue;
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                scannerContainer.style.display = 'none';
+                searchData();
+            } else {
+                requestAnimationFrame(detect);
+            }
+        };
+        detect();
+    } catch (err) {
+        document.getElementById('result').innerHTML = '<p>خطا: ' + err.message + '</p>';
+        scannerContainer.style.display = 'none';
+        console.log(err); // برای دیدن جزئیات خطا
     });
 
     Quagga.onDetected((result) => {
@@ -121,3 +130,4 @@ function searchData() {
 }
 
 document.getElementById('searchBtn').addEventListener('click', searchData);
+
